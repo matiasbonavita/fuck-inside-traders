@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 from sqlalchemy import select
 
 from fuck_inside_traders.storage.models import (
+    AnalystReport,
     AnomalyEvent,
     AssetPriceSnapshot,
     Market,
@@ -79,6 +80,15 @@ def test_model_creation_and_basic_persistence(db_session) -> None:
             status="planned",
         )
     )
+    db_session.add(
+        AnalystReport(
+            anomaly_event_id=event.id,
+            backend="deterministic",
+            status="success",
+            report_json={"ok": True},
+            summary_text="Dry-run public-data anomaly report for manual review, not an accusation.",
+        )
+    )
     db_session.commit()
 
     assert db_session.scalar(select(Market).where(Market.external_id == "mock-1")) is not None
@@ -87,3 +97,7 @@ def test_model_creation_and_basic_persistence(db_session) -> None:
         is not None
     )
     assert db_session.scalar(select(PaperTrade).where(PaperTrade.symbol == "USO")) is not None
+    assert (
+        db_session.scalar(select(AnalystReport).where(AnalystReport.backend == "deterministic"))
+        is not None
+    )

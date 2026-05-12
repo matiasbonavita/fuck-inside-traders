@@ -24,6 +24,10 @@ class Settings:
     polymarket_api_base_url: str
     gdelt_api_base_url: str
     gdelt_enabled: bool
+    analyst_backend: str
+    hermes_enabled: bool
+    hermes_endpoint: str | None
+    hermes_timeout_seconds: float
     log_level: str
 
 
@@ -45,5 +49,9 @@ def get_settings() -> Settings:
             "https://api.gdeltproject.org/api/v2/doc/doc",
         ),
         gdelt_enabled=_env_bool("GDELT_ENABLED", True),
+        analyst_backend=os.getenv("ANALYST_BACKEND", "deterministic"),
+        hermes_enabled=_env_bool("HERMES_ENABLED", False),
+        hermes_endpoint=os.getenv("HERMES_ENDPOINT") or None,
+        hermes_timeout_seconds=float(os.getenv("HERMES_TIMEOUT_SECONDS", "20")),
         log_level=os.getenv("LOG_LEVEL", "INFO"),
     )

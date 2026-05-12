@@ -152,6 +152,34 @@ class AnomalyEvent(Base):
         back_populates="anomaly_event",
         cascade="all, delete-orphan",
     )
+    analyst_reports: Mapped[list[AnalystReport]] = relationship(
+        back_populates="anomaly_event",
+        cascade="all, delete-orphan",
+    )
+
+
+class AnalystReport(Base):
+    __tablename__ = "analyst_reports"
+    __table_args__ = (
+        Index("ix_analyst_reports_event_backend", "anomaly_event_id", "backend", unique=True),
+        Index("ix_analyst_reports_backend_created_at", "backend", "created_at"),
+        Index("ix_analyst_reports_status_created_at", "status", "created_at"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    anomaly_event_id: Mapped[int] = mapped_column(ForeignKey("anomaly_events.id"), index=True)
+    backend: Mapped[str] = mapped_column(String(64), index=True)
+    status: Mapped[str] = mapped_column(String(64), index=True)
+    report_json: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    summary_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utc_now,
+        onupdate=utc_now,
+    )
+
+    anomaly_event: Mapped[AnomalyEvent] = relationship(back_populates="analyst_reports")
 
 
 class PaperTrade(Base):

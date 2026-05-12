@@ -59,6 +59,12 @@
 - Added a combined local `make monitor` workflow that collects public data and then runs the detector on each cycle.
 - Added dashboard "Live Market Signal Review" so below-threshold markets show score components and why no alert fired.
 - Deactivate old live Polymarket markets that are absent from the latest accepted live collection.
+- Added structured analyst context schemas for Hermes-ready reporting.
+- Added an `AnalystReport` persistence model with event/backend/status indexes.
+- Added deterministic and Hermes analyst backends; deterministic remains default and Hermes is disabled unless explicitly configured.
+- Added `make analyst-once` and `make analyst` for local analyst report processing.
+- Added dashboard "Analyst Reports" visibility.
+- Added tests for analyst context assembly, report persistence, safe deterministic wording, Hermes disabled behavior, and analyst runner behavior.
 
 ## Remaining
 
@@ -68,7 +74,7 @@
 - Add Kalshi provider behind the existing prediction-market abstraction.
 - Add official-source headline providers.
 - Add paper-trade simulation logic on top of the existing `PaperTrade` model.
-- Optionally back the deterministic analyst interface with Hermes after V1 remains stable.
+- Connect a real Hermes endpoint only after endpoint/auth details exist and manual review requirements are confirmed.
 - Add persistent migrations with Alembic once the schema stabilizes.
 
 ## Guardrails

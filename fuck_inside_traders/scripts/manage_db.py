@@ -19,6 +19,7 @@ from fuck_inside_traders.provenance import (
 )
 from fuck_inside_traders.storage.database import engine, init_db, session_scope
 from fuck_inside_traders.storage.models import (
+    AnalystReport,
     AnomalyEvent,
     AssetPriceSnapshot,
     Base,
@@ -72,12 +73,14 @@ def clean_demo() -> dict[str, int]:
         "asset_snapshots": 0,
         "news_items": 0,
         "markets": 0,
+        "analyst_reports": 0,
     }
     demo_kinds = {MOCK, SYNTHETIC, UNKNOWN}
     with session_scope() as session:
         for event in session.scalars(select(AnomalyEvent)).all():
             market_source = event.market.source if event.market else ""
             if is_demo_or_mock_event(event) or "mock" in market_source.lower():
+                counts["analyst_reports"] += len(event.analyst_reports)
                 session.delete(event)
                 counts["events"] += 1
         session.flush()
@@ -103,6 +106,14 @@ def clean_demo() -> dict[str, int]:
         for market in session.scalars(select(Market).where(Market.source.ilike("%mock%"))):
             session.delete(market)
             counts["markets"] += 1
+
+        for report in session.scalars(
+            select(AnalystReport)
+            .join(AnomalyEvent, AnalystReport.anomaly_event_id == AnomalyEvent.id)
+            .where(AnomalyEvent.market_id.is_(None))
+        ):
+            session.delete(report)
+            counts["analyst_reports"] += 1
 
         session.add(
             CollectorStatus(

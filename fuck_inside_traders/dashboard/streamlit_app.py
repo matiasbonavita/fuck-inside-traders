@@ -21,6 +21,7 @@ from fuck_inside_traders.monitoring import age_minutes, is_stale
 from fuck_inside_traders.provenance import ALERT_MOCK_BACKED, ALERT_UNKNOWN, anomaly_event_label
 from fuck_inside_traders.storage.database import init_db, session_scope
 from fuck_inside_traders.storage.models import (
+    AnalystReport,
     AnomalyEvent,
     AssetPriceSnapshot,
     CollectorStatus,
@@ -234,6 +235,9 @@ def load_dashboard_data() -> dict[str, pd.DataFrame]:
                 .order_by(desc(PolymarketDiscoveryCandidate.created_at))
                 .limit(100)
             )
+        )
+        analyst_reports = list(
+            session.scalars(select(AnalystReport).order_by(desc(AnalystReport.created_at)).limit(50))
         )
 
         if latest_event:
@@ -469,6 +473,27 @@ def load_dashboard_data() -> dict[str, pd.DataFrame]:
                 ]
             ),
             "live_market_scores": pd.DataFrame(live_market_signal_rows),
+            "analyst_reports": pd.DataFrame(
+                [
+                    {
+                        "created_at": report.created_at,
+                        "event_id": report.anomaly_event_id,
+                        "topic": report.anomaly_event.topic
+                        if report.anomaly_event
+                        else "unknown",
+                        "market": report.anomaly_event.market.title
+                        if report.anomaly_event and report.anomaly_event.market
+                        else "unknown",
+                        "backend": report.backend,
+                        "status": report.status,
+                        "provenance": anomaly_event_label(report.anomaly_event)
+                        if report.anomaly_event
+                        else "UNKNOWN",
+                        "summary": report.summary_text,
+                    }
+                    for report in analyst_reports
+                ]
+            ),
         }
 
 
@@ -761,6 +786,13 @@ if not news_df.empty:
     st.dataframe(news_df, width="stretch", hide_index=True)
 else:
     st.write("No matching public headlines in the loaded timeline.")
+
+st.subheader("Analyst Reports")
+analyst_reports_df = data["analyst_reports"]
+if analyst_reports_df.empty:
+    st.write("No analyst reports yet.")
+else:
+    st.dataframe(analyst_reports_df, width="stretch", hide_index=True)
 
 st.subheader("Paper Trades")
 paper_df = data["paper_trades"]

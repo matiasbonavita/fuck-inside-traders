@@ -32,7 +32,9 @@ The default `.env.example` points at the local Postgres service from `docker-com
 ```bash
 make collect-once
 make detect-once
+make analyst-once
 make monitor
+make analyst
 make review-polymarket TOPIC=iran_oil
 make dashboard
 make logs
@@ -41,6 +43,8 @@ make logs
 `make collect-once` and `make detect-once` create tables automatically. If public APIs fail or return an unexpected shape, collectors log the failure and use deterministic fallback data so the app keeps running locally.
 
 `make monitor` runs a local dry-run loop: collect public data, run the detector, sleep, and repeat. Use `make monitor INTERVAL=2` to change the interval in minutes. The loop never executes trades.
+
+`make analyst-once` processes existing `AnomalyEvent` rows that do not yet have an analyst report for the configured backend. The default backend is deterministic and local. `make analyst` runs the same reporting loop on a schedule.
 
 ## Local Demo Workflows
 
@@ -118,6 +122,28 @@ Real Telegram delivery is only attempted when:
 
 Missing Telegram credentials do not crash the app.
 
+## Analyst / Hermes Readiness
+
+The detector remains deterministic Python and is the only component that decides whether an anomaly event exists. The analyst layer starts only after an `AnomalyEvent` exists.
+
+Configured defaults:
+
+```bash
+ANALYST_BACKEND=deterministic
+HERMES_ENABLED=false
+HERMES_ENDPOINT=
+HERMES_TIMEOUT_SECONDS=20
+```
+
+Analyst context is assembled as a structured Pydantic schema with event fields, market metadata, score breakdown, prediction snapshots, asset snapshots, headline timeline, provider health, and provenance. Analyst reports are persisted in `analyst_reports`.
+
+Available backends:
+
+- `deterministic`: default local backend. Produces a structured report and safe summary text.
+- `hermes`: Hermes-ready backend stub. It validates and packages the same context, but does not make a network call unless `HERMES_ENABLED=true` and `HERMES_ENDPOINT` is configured.
+
+Hermes must remain an optional reporting layer. It must not create anomaly events, override scores, execute trades, choose position sizes, identify suspects, or make accusations.
+
 ## Provenance Labels
 
 Every new anomaly explanation includes a provenance label:
@@ -162,13 +188,15 @@ The dashboard starts with "Live Monitoring State":
 
 The news table is labeled "Headline Sources For Topic" / "Headline Timeline For Topic" because headlines come from RSS/GDELT, not Polymarket.
 
+"Analyst Reports" shows saved deterministic or Hermes report status, backend, provenance label, and summary text. These reports are manual-review aids only.
+
 ## Safety
 
 - No real-money trading execution exists.
 - No brokerage APIs are used.
 - No secrets are stored in code.
 - Detection is deterministic Python logic.
-- The analyst layer in `fuck_inside_traders/reports/analyst.py` is a deterministic stub for future optional Hermes integration.
+- The analyst layer in `fuck_inside_traders/reports/analyst.py` is optional reporting only; Hermes is disabled by default.
 
 ## Development
 
