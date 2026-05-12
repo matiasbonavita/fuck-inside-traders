@@ -20,6 +20,7 @@ from fuck_inside_traders.collectors.polymarket import (
     PolymarketCollector,
     PolymarketDiscoveryRecord,
     PolymarketHttpProvider,
+    PredictionMarketRecord,
     market_relevance_score,
     score_polymarket_relevance,
 )
@@ -173,6 +174,94 @@ def test_polymarket_fetches_watchlisted_market(db_session) -> None:
     assert candidate is not None
     assert candidate.accepted is True
     assert candidate.query == "watchlist"
+
+
+def test_polymarket_watchlist_prefers_external_id_market_fetch(db_session) -> None:
+    watchlist = {
+        "iran_oil": [
+            PolymarketWatchlistEntry(
+                topic="iran_oil",
+                slug="strait-of-hormuz-traffic-returns-to-normal-by-may-15",
+                external_id="2054133",
+                active=True,
+            )
+        ]
+    }
+    seen_paths: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen_paths.append(request.url.path)
+        assert request.url.path == "/markets/2054133"
+        return httpx.Response(
+            200,
+            json={
+                "id": "2054133",
+                "question": "Strait of Hormuz traffic returns to normal by May 15?",
+                "slug": "strait-of-hormuz-traffic-returns-to-normal-by-may-15",
+                "active": True,
+                "closed": False,
+                "outcomePrices": "[\"0.25\", \"0.75\"]",
+                "volume": "1000",
+            },
+        )
+
+    provider = PolymarketHttpProvider(
+        base_url="https://mock.polymarket.local",
+        transport=httpx.MockTransport(handler),
+        watchlist=watchlist,
+    )
+
+    count = PolymarketCollector(provider=provider).collect(db_session, [topic()])
+
+    assert count == 1
+    assert seen_paths == ["/markets/2054133"]
+
+
+def test_polymarket_collector_deactivates_absent_live_markets(db_session) -> None:
+    db_session.add(
+        Market(
+            source="polymarket",
+            external_id="old-market",
+            title="Old watchlist market",
+            topic="iran_oil",
+            active=True,
+        )
+    )
+    db_session.flush()
+
+    class OneLiveMarketProvider:
+        def fetch_markets(self, topics: list[Topic]) -> list[PredictionMarketRecord]:
+            return [
+                PredictionMarketRecord(
+                    source="polymarket",
+                    provider_kind=LIVE,
+                    external_id="current-market",
+                    title="Will Iran oil exports be disrupted?",
+                    topic=topics[0].name,
+                    url=None,
+                    active=True,
+                    probability=0.55,
+                    volume=1000.0,
+                    liquidity=None,
+                    bid=None,
+                    ask=None,
+                    timestamp=datetime.now(UTC),
+                )
+            ]
+
+    count = PolymarketCollector(provider=OneLiveMarketProvider()).collect(db_session, [topic()])
+    db_session.flush()
+
+    old_market = db_session.scalar(select(Market).where(Market.external_id == "old-market"))
+    current_market = db_session.scalar(
+        select(Market).where(Market.external_id == "current-market")
+    )
+
+    assert count == 1
+    assert old_market is not None
+    assert old_market.active is False
+    assert current_market is not None
+    assert current_market.active is True
 
 
 def test_polymarket_watchlist_closed_market_is_rejected(db_session) -> None:
@@ -526,6 +615,7 @@ def test_public_news_provider_handles_gdelt_429_without_crashing() -> None:
         gdelt_base_url="https://mock.gdelt.local",
         transport=httpx.MockTransport(handler),
         backoff_seconds=0,
+        gdelt_enabled=True,
     )
 
     records = provider.fetch_news([topic()], [])
@@ -548,6 +638,7 @@ def test_public_news_provider_records_gdelt_non_json_preview() -> None:
         gdelt_base_url="https://mock.gdelt.local",
         transport=httpx.MockTransport(handler),
         backoff_seconds=0,
+        gdelt_enabled=True,
     )
 
     records = provider.fetch_news([topic()], [])

@@ -76,11 +76,13 @@ class PublicNewsProvider:
         timeout: float = 12.0,
         transport: httpx.BaseTransport | None = None,
         backoff_seconds: float = 1.0,
+        gdelt_enabled: bool | None = None,
     ) -> None:
         self.gdelt_base_url = gdelt_base_url or get_settings().gdelt_api_base_url
         self.timeout = timeout
         self.transport = transport
         self.backoff_seconds = backoff_seconds
+        self.gdelt_enabled = gdelt_enabled
         self.last_statuses: list[dict[str, str]] = []
         self._gdelt_cache: dict[str, tuple[datetime, list[NewsRecord]]] = {}
 
@@ -91,7 +93,10 @@ class PublicNewsProvider:
 
     def _fetch_gdelt(self, topics: list[Topic]) -> list[NewsRecord]:
         records: list[NewsRecord] = []
-        if not get_settings().gdelt_enabled:
+        gdelt_enabled = (
+            get_settings().gdelt_enabled if self.gdelt_enabled is None else self.gdelt_enabled
+        )
+        if not gdelt_enabled:
             for topic in topics:
                 self._status("gdelt", "headline", "disabled", LIVE, topic.name)
             return records

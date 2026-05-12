@@ -415,14 +415,6 @@ class PolymarketHttpProvider:
     ) -> list[dict[str, Any]]:
         slug = entry.slug or _slug_from_url(entry.url)
         requests: list[tuple[str, dict[str, str]]] = []
-        if slug:
-            requests.extend(
-                [
-                    (f"{self.base_url}/events/slug/{slug}", {}),
-                    (f"{self.base_url}/markets/slug/{slug}", {}),
-                    (f"{self.base_url}/markets", {"slug": slug}),
-                ]
-            )
         if entry.external_id:
             requests.extend(
                 [
@@ -431,6 +423,23 @@ class PolymarketHttpProvider:
                     (f"{self.base_url}/markets", {"condition_ids": entry.external_id}),
                 ]
             )
+        if slug:
+            if entry.external_id:
+                requests.extend(
+                    [
+                        (f"{self.base_url}/markets/slug/{slug}", {}),
+                        (f"{self.base_url}/events/slug/{slug}", {}),
+                        (f"{self.base_url}/markets", {"slug": slug}),
+                    ]
+                )
+            else:
+                requests.extend(
+                    [
+                        (f"{self.base_url}/events/slug/{slug}", {}),
+                        (f"{self.base_url}/markets/slug/{slug}", {}),
+                        (f"{self.base_url}/markets", {"slug": slug}),
+                    ]
+                )
 
         if not requests:
             logger.warning("Polymarket watchlist entry has no identifier topic=%s", topic.name)
@@ -751,6 +760,7 @@ class PolymarketCollector:
                 )
             )
             count += 1
+        self._deactivate_absent_live_markets(session, records)
         summary = self._discovery_summary(discovery_candidates)
         status = "ok"
         provider_kind = LIVE
@@ -775,6 +785,40 @@ class PolymarketCollector:
         )
         logger.info(message)
         return count
+
+    def _deactivate_absent_live_markets(
+        self,
+        session: Session,
+        records: list[PredictionMarketRecord],
+    ) -> None:
+        live_records_by_source_topic: dict[tuple[str, str], set[str]] = {}
+        for record in records:
+            if record.provider_kind != LIVE:
+                continue
+            live_records_by_source_topic.setdefault((record.source, record.topic), set()).add(
+                record.external_id
+            )
+
+        for (source, topic), external_ids in live_records_by_source_topic.items():
+            inactive_markets = list(
+                session.scalars(
+                    select(Market).where(
+                        Market.source == source,
+                        Market.topic == topic,
+                        Market.active.is_(True),
+                        ~Market.external_id.in_(external_ids),
+                    )
+                )
+            )
+            for market in inactive_markets:
+                market.active = False
+            if inactive_markets:
+                logger.info(
+                    "Deactivated absent prediction markets source=%s topic=%s count=%s",
+                    source,
+                    topic,
+                    len(inactive_markets),
+                )
 
     def _store_discovery_candidates(
         self,

@@ -32,12 +32,15 @@ The default `.env.example` points at the local Postgres service from `docker-com
 ```bash
 make collect-once
 make detect-once
+make monitor
 make review-polymarket TOPIC=iran_oil
 make dashboard
 make logs
 ```
 
 `make collect-once` and `make detect-once` create tables automatically. If public APIs fail or return an unexpected shape, collectors log the failure and use deterministic fallback data so the app keeps running locally.
+
+`make monitor` runs a local dry-run loop: collect public data, run the detector, sleep, and repeat. Use `make monitor INTERVAL=2` to change the interval in minutes. The loop never executes trades.
 
 ## Local Demo Workflows
 
@@ -85,7 +88,7 @@ topics:
         active: true
 ```
 
-Watchlist entries may use a slug, external ID, or URL. If a watchlisted market cannot be fetched, FIT logs a warning and continues.
+Watchlist entries may use a slug, external ID, or URL. When `external_id` is present, FIT fetches the exact Polymarket market endpoint first, then falls back to slug/event lookups. If a watchlisted market cannot be fetched, FIT logs a warning and continues.
 
 For non-watchlist discovery, FIT uses Polymarket `/public-search` with the configured queries, deduplicates by external ID, applies blocklist first, accepts allowlisted markets, and then applies deterministic relevance scoring. The scorer uses title/question, description, slug, tags, category, outcomes, topic keywords, configured negative keywords, and relevant categories from `config/thresholds.yaml`.
 
@@ -100,6 +103,8 @@ python -m fuck_inside_traders.scripts.review_polymarket_candidates --topic iran_
 The output includes topic, query, accepted flag, active/closed state, relevance score, rejection reason, external ID, slug, and title. Promotion is manual: copy a relevant active/open slug into `config/polymarket_watchlist.yaml` with a description and `active: true`.
 
 Closed, inactive, or unfetched watchlist entries are stored as rejected discovery candidates and shown separately in the dashboard. They are not treated as live prediction-market candidates.
+
+When a live Polymarket collection succeeds, older active Polymarket markets for the same topic that are absent from the accepted live set are marked inactive locally. This keeps retired watchlist entries from looking current in the dashboard.
 
 ## Telegram Alerts
 
@@ -152,6 +157,8 @@ The dashboard starts with "Live Monitoring State":
 - Fresh/stale age indicators from `config/thresholds.yaml`.
 
 "Live data collected, no anomaly detected" means the live data path is working but deterministic scores stayed below the alert threshold.
+
+"Live Market Signal Review" shows current deterministic score components for active live Polymarket markets even when no anomaly event is created. Use it to see whether a market is below threshold, waiting for more live snapshots, or missing related asset movement in the scoring window.
 
 The news table is labeled "Headline Sources For Topic" / "Headline Timeline For Topic" because headlines come from RSS/GDELT, not Polymarket.
 

@@ -1,12 +1,22 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 import pandas as pd
 import streamlit as st
 from sqlalchemy import desc, func, select
+from sqlalchemy.orm import Session
 
+from fuck_inside_traders.collectors.news import had_matching_headline_before
 from fuck_inside_traders.config import load_thresholds, load_topics
+from fuck_inside_traders.detectors.scoring import (
+    combine_signal_score,
+    compute_asset_confirmation,
+    compute_headline_gap,
+    compute_odds_jump,
+    compute_volume_spike,
+)
 from fuck_inside_traders.monitoring import age_minutes, is_stale
 from fuck_inside_traders.provenance import ALERT_MOCK_BACKED, ALERT_UNKNOWN, anomaly_event_label
 from fuck_inside_traders.storage.database import init_db, session_scope
@@ -20,8 +30,167 @@ from fuck_inside_traders.storage.models import (
     PolymarketDiscoveryCandidate,
     PredictionMarketSnapshot,
 )
+from fuck_inside_traders.time_utils import ensure_utc
 
 st.set_page_config(page_title="Fuck Inside Traders", layout="wide")
+
+
+def _latest_prior_headline_gap_minutes(
+    session: Session,
+    topic: str,
+    before_timestamp: datetime,
+    lookback_minutes: int,
+) -> float | None:
+    before_timestamp = ensure_utc(before_timestamp)
+    latest = session.scalar(
+        select(NewsItem.published_at)
+        .where(
+            NewsItem.topic == topic,
+            NewsItem.published_at < before_timestamp,
+            NewsItem.published_at
+            >= before_timestamp - timedelta(minutes=lookback_minutes),
+        )
+        .order_by(desc(NewsItem.published_at))
+        .limit(1)
+    )
+    if latest is None:
+        return None
+    return max(0.0, (before_timestamp - ensure_utc(latest)).total_seconds() / 60.0)
+
+
+def _load_live_market_signal_rows(
+    session: Session,
+    topics_by_name: dict[str, Any],
+    thresholds: Any,
+) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    markets = list(
+        session.scalars(
+            select(Market)
+            .where(Market.active.is_(True), Market.source == "polymarket")
+            .order_by(Market.topic, Market.title)
+            .limit(100)
+        )
+    )
+    alert_threshold = float(thresholds.alert_threshold)
+    for market in markets:
+        topic = topics_by_name.get(market.topic)
+        snapshots = list(
+            session.scalars(
+                select(PredictionMarketSnapshot)
+                .where(PredictionMarketSnapshot.market_id == market.id)
+                .order_by(PredictionMarketSnapshot.timestamp.asc())
+                .limit(500)
+            )
+        )
+        live_snapshot_count = sum(
+            1 for snapshot in snapshots if snapshot.provider_kind == "live"
+        )
+        latest_snapshot = max(
+            (ensure_utc(snapshot.timestamp) for snapshot in snapshots),
+            default=None,
+        )
+        base_row: dict[str, Any] = {
+            "market_id": market.id,
+            "topic": market.topic,
+            "market": market.title,
+            "live_snapshots": live_snapshot_count,
+            "total_snapshots": len(snapshots),
+            "latest_snapshot": latest_snapshot,
+            "signal_score": None,
+            "alert_threshold": alert_threshold,
+            "odds_score": None,
+            "volume_score": None,
+            "asset_score": None,
+            "headline_score": None,
+            "odds_jump": None,
+            "volume_z": None,
+            "asset_moves": "",
+            "headline_gap_minutes": None,
+            "why_no_alert": "",
+        }
+        if topic is None:
+            rows.append({**base_row, "status": "unconfigured_topic"})
+            continue
+        if len(snapshots) < 2:
+            rows.append(
+                {
+                    **base_row,
+                    "status": "insufficient_snapshots",
+                    "why_no_alert": "Need at least two prediction snapshots.",
+                }
+            )
+            continue
+
+        odds_result = compute_odds_jump(snapshots, thresholds.windows_minutes)
+        volume_result = compute_volume_spike(snapshots)
+        asset_snapshots_by_symbol: dict[str, list[AssetPriceSnapshot]] = {}
+        for symbol in topic.assets:
+            asset_snapshots_by_symbol[symbol] = list(
+                session.scalars(
+                    select(AssetPriceSnapshot)
+                    .where(
+                        AssetPriceSnapshot.topic == topic.name,
+                        AssetPriceSnapshot.symbol == symbol,
+                    )
+                    .order_by(AssetPriceSnapshot.timestamp.asc())
+                    .limit(500)
+                )
+            )
+        asset_result = compute_asset_confirmation(
+            asset_snapshots_by_symbol,
+            odds_result.window_minutes or max(thresholds.windows_minutes),
+        )
+        headline_lookback = max(thresholds.windows_minutes)
+        had_headline = had_matching_headline_before(
+            market.topic,
+            odds_result.started_at,
+            headline_lookback,
+            session=session,
+        )
+        prior_gap = _latest_prior_headline_gap_minutes(
+            session,
+            market.topic,
+            odds_result.started_at,
+            headline_lookback,
+        )
+        headline_result = compute_headline_gap(had_headline, headline_lookback, prior_gap)
+        signal_score = combine_signal_score(
+            odds_result.score,
+            volume_result.score,
+            asset_result.score,
+            headline_result.score,
+            topic.topic_importance,
+        )
+        reasons = []
+        status = "below_threshold"
+        if signal_score >= alert_threshold:
+            status = "at_or_above_threshold"
+        else:
+            reasons.append(f"Signal {signal_score:.2f} is below {alert_threshold:.2f}.")
+        if live_snapshot_count < 2:
+            reasons.append("Needs more live prediction-market history.")
+        if not asset_result.moves:
+            reasons.append("No related asset movement available for the scoring window.")
+        rows.append(
+            {
+                **base_row,
+                "status": status,
+                "signal_score": signal_score,
+                "odds_score": odds_result.score,
+                "volume_score": volume_result.score,
+                "asset_score": asset_result.score,
+                "headline_score": headline_result.score,
+                "odds_jump": odds_result.odds_jump,
+                "volume_z": volume_result.z_score,
+                "asset_moves": ", ".join(
+                    f"{symbol} {move:+.2%}" for symbol, move in asset_result.moves.items()
+                ),
+                "headline_gap_minutes": headline_result.gap_minutes,
+                "why_no_alert": " ".join(reasons) or "Score is at or above threshold.",
+            }
+        )
+    return rows
 
 
 @st.cache_data(ttl=30)
@@ -41,6 +210,7 @@ def load_dashboard_data() -> dict[str, pd.DataFrame]:
         ]
         latest_event = review_events[0] if review_events else None
         topics = load_topics()
+        topics_by_name = {topic.name: topic for topic in topics}
         fallback_topic = topics[0].name if topics else None
         display_topic = (
             latest_event.topic
@@ -144,6 +314,11 @@ def load_dashboard_data() -> dict[str, pd.DataFrame]:
         latest_detector_status = next(
             (status for status in statuses if status.data_type == "detector"),
             None,
+        )
+        live_market_signal_rows = _load_live_market_signal_rows(
+            session,
+            topics_by_name,
+            thresholds,
         )
 
         return {
@@ -293,6 +468,7 @@ def load_dashboard_data() -> dict[str, pd.DataFrame]:
                     for source, provider_kind, count in headline_source_counts
                 ]
             ),
+            "live_market_scores": pd.DataFrame(live_market_signal_rows),
         }
 
 
@@ -382,7 +558,7 @@ if not status_df.empty:
             "No live prediction market candidate passed the configured relevance filters. "
             f"{prediction_status['message']}"
         )
-    st.dataframe(status_df, use_container_width=True, hide_index=True)
+    st.dataframe(status_df, width="stretch", hide_index=True)
 else:
     st.write("No collector status rows yet.")
 
@@ -431,7 +607,7 @@ else:
                     "url",
                 ]
             ],
-            use_container_width=True,
+            width="stretch",
             hide_index=True,
         )
     with st.expander("Rejected Polymarket candidates", expanded=False):
@@ -450,7 +626,7 @@ else:
                     "external_id",
                 ]
             ],
-            use_container_width=True,
+            width="stretch",
             hide_index=True,
         )
     with st.expander("Stale / Closed / Inactive Watchlist Entries", expanded=False):
@@ -471,9 +647,56 @@ else:
                         "external_id",
                     ]
                 ],
-                use_container_width=True,
+                width="stretch",
                 hide_index=True,
             )
+
+st.subheader("Live Market Signal Review")
+score_df = data["live_market_scores"]
+if score_df.empty:
+    st.write("No active live Polymarket markets available for signal review.")
+else:
+    review_cols = st.columns(4)
+    scored_df = score_df[score_df["signal_score"].notna()]
+    insufficient_count = int((score_df["status"] == "insufficient_snapshots").sum())
+    max_score = float(scored_df["signal_score"].max()) if not scored_df.empty else 0.0
+    review_cols[0].metric("Markets Reviewed", len(score_df))
+    review_cols[1].metric("Max Signal", f"{max_score:.2f}")
+    review_cols[2].metric("Skipped", insufficient_count)
+    review_cols[3].metric("Alert Threshold", f"{float(score_df.iloc[0]['alert_threshold']):.2f}")
+    st.caption(
+        "Current deterministic scores for active live markets. "
+        "Rows can be below threshold even when all providers are healthy."
+    )
+    display_score_df = score_df.sort_values(
+        by=["signal_score", "latest_snapshot"],
+        ascending=[False, False],
+        na_position="last",
+    )
+    st.dataframe(
+        display_score_df[
+            [
+                "status",
+                "signal_score",
+                "alert_threshold",
+                "odds_score",
+                "volume_score",
+                "asset_score",
+                "headline_score",
+                "odds_jump",
+                "volume_z",
+                "headline_gap_minutes",
+                "live_snapshots",
+                "total_snapshots",
+                "topic",
+                "market",
+                "why_no_alert",
+                "asset_moves",
+            ]
+        ],
+        width="stretch",
+        hide_index=True,
+    )
 
 events_df = data["events"]
 if events_df.empty:
@@ -486,7 +709,7 @@ else:
     if review_events_df.empty:
         st.info("No live or partial-live anomaly candidates yet.")
     else:
-        st.dataframe(review_events_df, use_container_width=True, hide_index=True)
+        st.dataframe(review_events_df, width="stretch", hide_index=True)
         latest = review_events_df.iloc[0]
         metric_cols = st.columns(5)
         metric_cols[0].metric("Signal", f"{latest['signal_score']:.2f}")
@@ -499,7 +722,7 @@ else:
         if demo_events_df.empty:
             st.write("No demo/mock events.")
         else:
-            st.dataframe(demo_events_df, use_container_width=True, hide_index=True)
+            st.dataframe(demo_events_df, width="stretch", hide_index=True)
 
 st.subheader("Prediction Market Snapshot Chart")
 market_df = data["market_snapshots"]
@@ -508,7 +731,7 @@ if not market_df.empty:
     st.bar_chart(market_df.set_index("timestamp")[["volume"]])
     st.dataframe(
         market_df[["timestamp", "source", "provider_kind", "probability", "volume"]],
-        use_container_width=True,
+        width="stretch",
         hide_index=True,
     )
 else:
@@ -521,7 +744,7 @@ if not asset_df.empty:
     st.line_chart(pivot)
     st.dataframe(
         asset_df[["timestamp", "symbol", "source", "provider_kind", "price"]],
-        use_container_width=True,
+        width="stretch",
         hide_index=True,
     )
 else:
@@ -530,12 +753,12 @@ else:
 st.subheader("Headline Sources For Topic")
 headline_sources_df = data["headline_source_counts"]
 if not headline_sources_df.empty:
-    st.dataframe(headline_sources_df, use_container_width=True, hide_index=True)
+    st.dataframe(headline_sources_df, width="stretch", hide_index=True)
 
 st.subheader("Headline Timeline For Topic")
 news_df = data["news"]
 if not news_df.empty:
-    st.dataframe(news_df, use_container_width=True, hide_index=True)
+    st.dataframe(news_df, width="stretch", hide_index=True)
 else:
     st.write("No matching public headlines in the loaded timeline.")
 
@@ -544,4 +767,4 @@ paper_df = data["paper_trades"]
 if paper_df.empty:
     st.write("No paper trades yet. V1 stores the placeholder model only.")
 else:
-    st.dataframe(paper_df, use_container_width=True, hide_index=True)
+    st.dataframe(paper_df, width="stretch", hide_index=True)

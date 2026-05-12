@@ -52,11 +52,19 @@
 - Added detector protection to skip creating `LIVE` alerts when core data is stale.
 - Added dashboard "Live Monitoring State", headline source counts, explicit headline timeline labeling, and stale watchlist grouping.
 - Added tests for closed/inactive watchlist entries, GDELT non-JSON status, and stale live alert suppression.
+- Tightened curated Polymarket watchlist entries to exact active market IDs/slugs for Hormuz and OPEC coverage.
+- Changed watchlist fetching to prefer exact Polymarket market IDs before event slug expansion.
+- Verified the current live Polymarket run accepts 12 curated markets, rejects 0 current candidates, and uses no mock fallback.
+- Verified local GDELT disablement leaves RSS headline collection live and visible in provider status.
+- Added a combined local `make monitor` workflow that collects public data and then runs the detector on each cycle.
+- Added dashboard "Live Market Signal Review" so below-threshold markets show score components and why no alert fired.
+- Deactivate old live Polymarket markets that are absent from the latest accepted live collection.
 
 ## Remaining
 
 - Keep watchlisted Polymarket slugs fresh as markets close or resolve.
 - Keep adding curated Polymarket market IDs/slugs after manual review.
+- Let `make monitor` run long enough to build live 5/15/30 minute baselines before tuning thresholds.
 - Add Kalshi provider behind the existing prediction-market abstraction.
 - Add official-source headline providers.
 - Add paper-trade simulation logic on top of the existing `PaperTrade` model.

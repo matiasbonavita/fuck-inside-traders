@@ -1,4 +1,4 @@
-.PHONY: setup db db-reset seed-demo clean-demo backfill-provenance test lint collect-once detect-once review-polymarket dashboard logs
+.PHONY: setup db db-reset seed-demo clean-demo backfill-provenance test lint collect-once detect-once monitor review-polymarket dashboard logs
 
 PYTHON ?= python3.12
 VENV ?= .venv
@@ -37,6 +37,9 @@ collect-once:
 
 detect-once:
 	$(VENV_PYTHON) -m fuck_inside_traders.scripts.run_detector --once
+
+monitor:
+	$(VENV_PYTHON) -m fuck_inside_traders.scripts.monitor $(if $(INTERVAL),--interval-minutes $(INTERVAL),)
 
 review-polymarket:
 	$(VENV_PYTHON) -m fuck_inside_traders.scripts.review_polymarket_candidates $(if $(TOPIC),--topic $(TOPIC),)

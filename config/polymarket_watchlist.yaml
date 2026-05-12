@@ -6,10 +6,20 @@ topics:
         url: https://polymarket.com/event/strait-of-hormuz-traffic-returns-to-normal-by-may-15
         description: Curated live Hormuz market for validating live prediction-market ingestion.
         active: true
-      - slug: trump-announces-us-blockade-of-hormuz-lifted-by
-        external_id: "1972137"
+      - slug: will-donald-trump-announce-that-the-united-states-blockade-of-the-strait-of-hormuz-has-been-lifted-by-may-15-2026-154
+        external_id: "2097821"
         url: https://polymarket.com/event/trump-announces-us-blockade-of-hormuz-lifted-by
-        description: Curated Hormuz blockade market for geopolitical energy monitoring.
+        description: Exact active Hormuz blockade market for May 15.
+        active: true
+      - slug: will-donald-trump-announce-that-the-united-states-blockade-of-the-strait-of-hormuz-has-been-lifted-by-may-22-2026
+        external_id: "2119227"
+        url: https://polymarket.com/event/trump-announces-us-blockade-of-hormuz-lifted-by
+        description: Exact active Hormuz blockade market for May 22.
+        active: true
+      - slug: will-donald-trump-announce-that-the-united-states-blockade-of-the-strait-of-hormuz-has-been-lifted-by-june-30-2026
+        external_id: "2155023"
+        url: https://polymarket.com/event/trump-announces-us-blockade-of-hormuz-lifted-by
+        description: Exact active Hormuz blockade market for June 30.
         active: true
       - slug: strait-of-hormuz-traffic-returns-to-normal-by-end-of-may
         external_id: "1809560"
@@ -31,8 +41,23 @@ topics:
         url: https://polymarket.com/event/opec-dissolves-in-2026
         description: Curated OPEC stability market.
         active: true
-      - slug: opec-crude-oil-production-above-in-may
+      - slug: will-opec-crude-oil-production-be-above-18-million-barrels-per-day-in-may
         external_id: "2107314"
         url: https://polymarket.com/event/opec-crude-oil-production-above-in-may
-        description: Curated OPEC crude-production market.
+        description: Exact active OPEC crude-production threshold market above 18 million bpd.
+        active: true
+      - slug: will-opec-crude-oil-production-be-above-19-million-barrels-per-day-in-may
+        external_id: "2107315"
+        url: https://polymarket.com/event/opec-crude-oil-production-above-in-may
+        description: Exact active OPEC crude-production threshold market above 19 million bpd.
+        active: true
+      - slug: will-opec-crude-oil-production-be-above-20-million-barrels-per-day-in-may
+        external_id: "2107316"
+        url: https://polymarket.com/event/opec-crude-oil-production-above-in-may
+        description: Exact active OPEC crude-production threshold market above 20 million bpd.
+        active: true
+      - slug: will-opec-crude-oil-production-be-above-21-million-barrels-per-day-in-may
+        external_id: "2107317"
+        url: https://polymarket.com/event/opec-crude-oil-production-above-in-may
+        description: Exact active OPEC crude-production threshold market above 21 million bpd.
         active: true
