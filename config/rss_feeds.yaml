@@ -1,0 +1,11 @@
+feeds:
+  - name: BBC World
+    url: https://feeds.bbci.co.uk/news/world/rss.xml
+  - name: NPR News
+    url: https://feeds.npr.org/1001/rss.xml
+  - name: Al Jazeera
+    url: https://www.aljazeera.com/xml/rss/all.xml
+  - name: EIA Today in Energy
+    url: https://www.eia.gov/rss/todayinenergy.xml
+  - name: OilPrice
+    url: https://oilprice.com/rss/main

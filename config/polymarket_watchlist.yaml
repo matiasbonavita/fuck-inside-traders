@@ -1,0 +1,38 @@
+topics:
+  iran_oil:
+    markets:
+      - slug: strait-of-hormuz-traffic-returns-to-normal-by-may-15
+        external_id: "2054133"
+        url: https://polymarket.com/event/strait-of-hormuz-traffic-returns-to-normal-by-may-15
+        description: Curated live Hormuz market for validating live prediction-market ingestion.
+        active: true
+      - slug: trump-announces-us-blockade-of-hormuz-lifted-by
+        external_id: "1972137"
+        url: https://polymarket.com/event/trump-announces-us-blockade-of-hormuz-lifted-by
+        description: Curated Hormuz blockade market for geopolitical energy monitoring.
+        active: true
+      - slug: strait-of-hormuz-traffic-returns-to-normal-by-end-of-may
+        external_id: "1809560"
+        url: https://polymarket.com/event/strait-of-hormuz-traffic-returns-to-normal-by-end-of-may
+        description: Curated Hormuz traffic normalization market for energy-route monitoring.
+        active: true
+      - slug: strait-of-hormuz-traffic-returns-to-normal-by-end-of-june
+        external_id: "1971905"
+        url: https://polymarket.com/event/strait-of-hormuz-traffic-returns-to-normal-by-end-of-june
+        description: Curated longer-window Hormuz traffic normalization market.
+        active: true
+      - slug: will-another-country-leave-opec-in-2026
+        external_id: "2105977"
+        url: https://polymarket.com/event/will-another-country-leave-opec-in-2026
+        description: Curated OPEC geopolitical-energy market.
+        active: true
+      - slug: opec-dissolves-in-2026
+        external_id: "2106368"
+        url: https://polymarket.com/event/opec-dissolves-in-2026
+        description: Curated OPEC stability market.
+        active: true
+      - slug: opec-crude-oil-production-above-in-may
+        external_id: "2107314"
+        url: https://polymarket.com/event/opec-crude-oil-production-above-in-may
+        description: Curated OPEC crude-production market.
+        active: true

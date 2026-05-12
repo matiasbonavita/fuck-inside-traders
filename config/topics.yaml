@@ -1,0 +1,51 @@
+topics:
+  iran_oil:
+    keywords:
+      - iran
+      - israel
+      - ceasefire
+      - oil
+      - opec
+      - hormuz
+      - sanctions
+    include_keywords:
+      - iran
+      - israel
+      - oil
+      - opec
+      - hormuz
+      - sanctions
+      - crude
+      - energy
+      - tanker
+      - strait
+    exclude_keywords:
+      - fifa
+      - world cup
+      - soccer
+      - football
+      - nba
+      - nfl
+      - mlb
+      - champions league
+      - tennis
+      - cricket
+    polymarket_queries:
+      - iran oil
+      - iran israel oil
+      - hormuz oil
+      - hormuz
+      - oil
+      - opec iran
+      - opec
+      - iran sanctions oil
+    polymarket_allowlist: []
+    polymarket_blocklist: []
+    min_market_relevance_score: 0.55
+    assets:
+      - USO
+      - XLE
+      - BNO
+      - GLD
+      - SPY
+    topic_importance: 1.0

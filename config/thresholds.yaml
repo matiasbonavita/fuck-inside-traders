@@ -1,0 +1,37 @@
+alert_threshold: 0.80
+watch_threshold: 0.65
+windows_minutes:
+  - 5
+  - 15
+  - 30
+prediction_market_fresh_minutes: 30
+asset_price_fresh_minutes: 30
+headline_fresh_minutes: 360
+detector_fresh_minutes: 30
+polymarket_relevance_threshold: 0.55
+polymarket_negative_keywords:
+  - sports
+  - fifa
+  - world cup
+  - nba
+  - nfl
+  - mlb
+  - soccer
+  - football
+  - celebrity
+  - music
+  - rihanna
+  - taylor swift
+  - gaming
+  - gta
+  - movies
+  - tv
+polymarket_relevant_categories:
+  - politics
+  - geopolitics
+  - economy
+  - economics
+  - energy
+  - commodities
+  - oil
+  - crypto
